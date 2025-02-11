@@ -110,9 +110,9 @@ export async function fetchTransactionDetails(signature: string): Promise<MintsD
       }
 
       // Output logs
-      console.log("Successfully fetched transaction details!");
-      console.log(`SOL Token Account: ${solTokenAccount}`);
-      console.log(`New Token Account: ${newTokenAccount}`);
+      console.log("\x1b[32m%s\x1b[0m", "\n✅ Successfully fetched transaction details!"); // Green text
+      console.log("\x1b[34m%s\x1b[0m", `🔹 SOL Token Account: ${solTokenAccount}`); // Blue text
+      console.log("\x1b[36m%s\x1b[0m", `🔹 New Token Account: ${newTokenAccount}\n`); // Cyan text      
 
       return {
         tokenMint: newTokenAccount,
@@ -382,80 +382,45 @@ export async function getRugCheckConfirmed(tokenMint: string): Promise<boolean> 
   const rugCheckConfig = config.rug_check;
   const rugCheckLegacy = rugCheckConfig.legacy_not_allowed;
 
-  // Set conditions
+  // Store failed checks
+  const failedChecks: string[] = [];
+
+  // Check conditions
   const conditions = [
-    {
-      check: !rugCheckConfig.allow_mint_authority && mintAuthority !== null,
-      message: "🚫 Mint authority should be null",
-    },
-    {
-      check: !rugCheckConfig.allow_not_initialized && !isInitialized,
-      message: "🚫 Token is not initialized",
-    },
-    {
-      check: !rugCheckConfig.allow_freeze_authority && freezeAuthority !== null,
-      message: "🚫 Freeze authority should be null",
-    },
-    {
-      check: !rugCheckConfig.allow_mutable && tokenMutable !== false,
-      message: "🚫 Mutable should be false",
-    },
-    {
-      check: !rugCheckConfig.allow_insider_topholders && topHolders.some((holder) => holder.insider),
-      message: "🚫 Insider accounts should not be part of the top holders",
-    },
-    {
-      check: topHolders.some((holder) => holder.pct > rugCheckConfig.max_alowed_pct_topholders),
-      message: "🚫 An individual top holder cannot hold more than the allowed percentage of the total supply",
-    },
-    {
-      check: totalLPProviders < rugCheckConfig.min_total_lp_providers,
-      message: "🚫 Not enough LP Providers.",
-    },
-    {
-      check: marketsLength < rugCheckConfig.min_total_markets,
-      message: "🚫 Not enough Markets.",
-    },
-    {
-      check: totalMarketLiquidity < rugCheckConfig.min_total_market_Liquidity,
-      message: "🚫 Not enough Market Liquidity.",
-    },
-    {
-      check: !rugCheckConfig.allow_rugged && isRugged, //true
-      message: "🚫 Token is rugged",
-    },
-    {
-      check: rugCheckConfig.block_symbols.includes(tokenSymbol),
-      message: "🚫 Symbol is blocked",
-    },
-    {
-      check: rugCheckConfig.block_names.includes(tokenName),
-      message: "🚫 Name is blocked",
-    },
-    {
-      check: rugScore > rugCheckConfig.max_score && rugCheckConfig.max_score !== 0,
-      message: "🚫 Rug score to high.",
-    },
-    {
-      check: rugRisks.some((risk) => rugCheckLegacy.includes(risk.name)),
-      message: "🚫 Token has legacy risks that are not allowed.",
-    },
+    { check: !rugCheckConfig.allow_mint_authority && mintAuthority !== null, message: "❌ Mint authority should be null" },
+    { check: !rugCheckConfig.allow_not_initialized && !isInitialized, message: "⚠️ Token is not initialized" },
+    { check: !rugCheckConfig.allow_freeze_authority && freezeAuthority !== null, message: "🧊 Freeze authority should be null" },
+    { check: !rugCheckConfig.allow_mutable && tokenMutable !== false, message: "🔀 Mutable should be false" },
+    { check: !rugCheckConfig.allow_insider_topholders && topHolders.some((holder) => holder.insider), message: "👀 Insider accounts should not be part of the top holders" },
+    { check: topHolders.some((holder) => holder.pct > rugCheckConfig.max_alowed_pct_topholders), message: "📊 An individual top holder cannot hold more than the allowed percentage of the total supply" },
+    { check: totalLPProviders < rugCheckConfig.min_total_lp_providers, message: "🏦 Not enough LP Providers" },
+    { check: marketsLength < rugCheckConfig.min_total_markets, message: "📉 Not enough Markets" },
+    { check: totalMarketLiquidity < rugCheckConfig.min_total_market_Liquidity, message: "💰 Not enough Market Liquidity" },
+    { check: !rugCheckConfig.allow_rugged && isRugged, message: "💀 Token is rugged" },
+    { check: rugCheckConfig.block_symbols.includes(tokenSymbol), message: "🚫 Symbol is blocked" },
+    { check: rugCheckConfig.block_names.includes(tokenName), message: "🚫 Name is blocked" },
+    { check: rugScore > rugCheckConfig.max_score && rugCheckConfig.max_score !== 0, message: "📈 Rug score too high" },
+    { check: rugRisks.some((risk) => rugCheckLegacy.includes(risk.name)), message: "⚡ Token has legacy risks that are not allowed" },
   ];
+  
+
+  // Validate conditions and collect failures
+  for (const condition of conditions) {
+    if (condition.check) {
+      failedChecks.push(condition.message);
+    }
+  }
 
   // If tracking duplicate tokens is enabled
   if (config.rug_check.block_returning_token_names || config.rug_check.block_returning_token_creators) {
-    // Get duplicates based on token min and creator
     const duplicate = await selectTokenByNameAndCreator(tokenName, tokenCreator);
 
-    // Verify if duplicate token or creator was returned
     if (duplicate.length !== 0) {
       if (config.rug_check.block_returning_token_names && duplicate.some((token) => token.name === tokenName)) {
-        console.log("🚫 Token with this name was already created");
-        return false;
+        failedChecks.push("🚫 Token with this name was already created");
       }
       if (config.rug_check.block_returning_token_creators && duplicate.some((token) => token.creator === tokenCreator)) {
-        console.log("🚫 Token from this creator was already created");
-        return false;
+        failedChecks.push("🚫 Token from this creator was already created");
       }
     }
   }
@@ -473,16 +438,16 @@ export async function getRugCheckConfirmed(tokenMint: string): Promise<boolean> 
     }
   });
 
-  //Validate conditions
-  for (const condition of conditions) {
-    if (condition.check) {
-      console.log(condition.message);
-      return false;
-    }
+  // If any checks failed, log them all and return false
+  if (failedChecks.length > 0) {
+    console.log("\t\t🚨 Rug Check Warnings 🚨\n");
+    failedChecks.forEach((message) => console.log("\t" + message));
+    return false;
   }
 
   return true;
 }
+
 
 export async function fetchAndSaveSwapDetails(tx: string): Promise<boolean> {
   const txUrl = process.env.HELIUS_HTTPS_URI_TX || "";
