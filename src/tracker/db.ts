@@ -1,7 +1,7 @@
 import * as sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import { config } from "./../config";
-import { HoldingRecord, NewTokenRecord } from "../types";
+import { HoldingRecord, NewTokenRecord, SoldHoldingRecord } from "../types";
 
 // Tracker
 export async function createTableHoldings(database: any): Promise<boolean> {
@@ -27,6 +27,80 @@ export async function createTableHoldings(database: any): Promise<boolean> {
     return false;
   }
 }
+
+export async function createTableSoldHoldings(database: any): Promise<boolean> {
+  try {
+    await database.exec(`
+      CREATE TABLE IF NOT EXISTS sold_holdings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        Time INTEGER NOT NULL, -- Time of sale
+        Token TEXT NOT NULL,
+        TokenName TEXT NOT NULL,
+        Balance REAL NOT NULL,
+        SolPaid REAL NOT NULL, -- Original cost in SOL
+        SolFeePaid REAL NOT NULL, -- Fees paid in SOL
+        SolPaidUSDC REAL NOT NULL, -- Original cost in USDC
+        SolFeePaidUSDC REAL NOT NULL, -- Fees paid in USDC
+        PerTokenPaidUSDC REAL NOT NULL, -- Original cost per token in USDC
+        Slot INTEGER NOT NULL,
+        Program TEXT NOT NULL,
+        SoldPriceUSDC REAL NOT NULL, -- Total sold price in USDC
+        SoldPerTokenUSDC REAL NOT NULL, -- Sold price per token in USDC
+        ProfitUSDC REAL NOT NULL -- Profit/loss in USDC
+      );
+    `);
+    return true;
+  } catch (error: any) {
+    return false;
+  }
+}
+
+export async function insertSoldHolding(soldHolding: SoldHoldingRecord) {
+  const db = await open({
+    filename: config.swap.db_name_tracker_holdings,
+    driver: sqlite3.Database,
+  });
+
+  // Create Table if not exists
+  const soldHoldingsTableExist = await createTableSoldHoldings(db);
+  if (!soldHoldingsTableExist) {
+    await db.close();
+  }
+
+  // Proceed with adding sold holding
+  if (soldHoldingsTableExist) {
+    const { Time, Token, TokenName, Balance, SolPaid, SolFeePaid, SolPaidUSDC, SolFeePaidUSDC, PerTokenPaidUSDC, Slot, Program, SoldPriceUSDC, SoldPerTokenUSDC, ProfitUSDC } = soldHolding;
+    
+    await db.run(
+      `
+      INSERT INTO sold_holdings (Time, Token, TokenName, Balance, SolPaid, SolFeePaid, SolPaidUSDC, SolFeePaidUSDC, PerTokenPaidUSDC, Slot, Program, SoldPriceUSDC, SoldPerTokenUSDC, ProfitUSDC)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      `,
+      [Time, Token, TokenName, Balance, SolPaid, SolFeePaid, SolPaidUSDC, SolFeePaidUSDC, PerTokenPaidUSDC, Slot, Program, SoldPriceUSDC, SoldPerTokenUSDC, ProfitUSDC]
+    );
+
+    await db.close();
+  }
+}
+
+export async function removeSoldHolding(tokenMint: string) {
+  const db = await open({
+    filename: config.swap.db_name_tracker_holdings,
+    driver: sqlite3.Database,
+  });
+
+  // Proceed with deleting the sold holding
+  await db.run(
+    `
+    DELETE FROM sold_holdings
+    WHERE Token = ?;
+    `,
+    [tokenMint]
+  );
+
+  await db.close();
+}
+
 
 export async function insertHolding(holding: HoldingRecord) {
   const db = await open({
@@ -208,4 +282,17 @@ export async function selectAllTokens(): Promise<NewTokenRecord[]> {
 
   // Return the results
   return tokens;
+}
+
+export async function selectHoldingByMint(tokenMint: string): Promise<HoldingRecord[]> {
+  const db = await open({
+      filename: config.swap.db_name_tracker_holdings,
+      driver: sqlite3.Database,
+  });
+
+  const query = `SELECT * FROM holdings WHERE Token = ?`;
+  const rows: HoldingRecord[] = await db.all(query, [tokenMint]);
+
+  await db.close();
+  return rows;
 }

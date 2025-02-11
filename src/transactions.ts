@@ -1,21 +1,27 @@
 import axios from "axios";
-import { Connection, Keypair, VersionedTransaction, PublicKey } from "@solana/web3.js";
-import { Wallet } from "@project-serum/anchor";
+import {Connection, Keypair, PublicKey, VersionedTransaction} from "@solana/web3.js";
+import {Wallet} from "@project-serum/anchor";
 import bs58 from "bs58";
 import dotenv from "dotenv";
-import { config } from "./config";
+import {config} from "./config";
 import {
-  TransactionDetailsResponseArray,
+  createSellTransactionResponse,
+  HoldingRecord,
   MintsDataReponse,
+  NewTokenRecord,
   QuoteResponse,
+  RugResponseExtended,
   SerializedQuoteResponse,
   SwapEventDetailsResponse,
-  HoldingRecord,
-  RugResponseExtended,
-  NewTokenRecord,
-  createSellTransactionResponse,
+  TransactionDetailsResponseArray,
 } from "./types";
-import { insertHolding, insertNewToken, removeHolding, selectTokenByMint, selectTokenByNameAndCreator } from "./tracker/db";
+import {
+  insertHolding,
+  insertNewToken,
+  removeHolding,
+  selectTokenByMint,
+  selectTokenByNameAndCreator
+} from "./tracker/db";
 
 // Load environment variables from the .env file
 dotenv.config();
@@ -27,13 +33,13 @@ export async function fetchTransactionDetails(signature: string): Promise<MintsD
   let retryCount = 0;
 
   // Add longer initial delay to allow transaction to be processed
-  console.log("Waiting " + config.tx.fetch_tx_initial_delay / 1000 + " seconds for transaction to be confirmed...");
+  // console.log("Waiting " + config.tx.fetch_tx_initial_delay / 1000 + " seconds for transaction to be confirmed...");
   await new Promise((resolve) => setTimeout(resolve, config.tx.fetch_tx_initial_delay));
 
   while (retryCount < maxRetries) {
     try {
       // Output logs
-      console.log(`Attempt ${retryCount + 1} of ${maxRetries} to fetch transaction details...`);
+      // console.log(`Attempt ${retryCount + 1} of ${maxRetries} to fetch transaction details...`);
 
       const response = await axios.post<any>(
         txUrl,
@@ -108,26 +114,24 @@ export async function fetchTransactionDetails(signature: string): Promise<MintsD
       console.log(`SOL Token Account: ${solTokenAccount}`);
       console.log(`New Token Account: ${newTokenAccount}`);
 
-      const displayData: MintsDataReponse = {
+      return {
         tokenMint: newTokenAccount,
         solMint: solTokenAccount,
       };
-
-      return displayData;
     } catch (error: any) {
-      console.log(`Attempt ${retryCount + 1} failed: ${error.message}`);
+      //console.log(`Attempt ${retryCount + 1} failed: ${error.message}`);
 
       retryCount++;
 
       if (retryCount < maxRetries) {
         const delay = Math.min(4000 * Math.pow(1.5, retryCount), 15000);
-        console.log(`Waiting ${delay / 1000} seconds before next attempt...`);
+        //console.log(`Waiting ${delay / 1000} seconds before next attempt...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
 
-  console.log("All attempts to fetch transaction details failed");
+  //console.log("All attempts to fetch transaction details failed");
   return null;
 }
 
@@ -333,13 +337,13 @@ export async function getRugCheckConfirmed(tokenMint: string): Promise<boolean> 
 
   if (!rugResponse.data) return false;
 
-  if (config.rug_check.verbose_log && config.rug_check.verbose_log === true) {
+  if (config.rug_check.verbose_log) {
     console.log(rugResponse.data);
   }
 
   // Extract information
   const tokenReport: RugResponseExtended = rugResponse.data;
-  const tokenCreator = tokenReport.creator ? tokenReport.creator : tokenMint;
+  const tokenCreator = tokenReport.creator ?? tokenMint;
   const mintAuthority = tokenReport.token.mintAuthority;
   const freezeAuthority = tokenReport.token.freezeAuthority;
   const isInitialized = tokenReport.token.isInitialized;
@@ -349,41 +353,29 @@ export async function getRugCheckConfirmed(tokenMint: string): Promise<boolean> 
   const tokenSymbol = tokenReport.tokenMeta.symbol;
   const tokenMutable = tokenReport.tokenMeta.mutable;
   let topHolders = tokenReport.topHolders;
-  const marketsLength = tokenReport.markets ? tokenReport.markets.length : 0;
+  const marketsLength = tokenReport.markets?.length ?? 0;
   const totalLPProviders = tokenReport.totalLPProviders;
   const totalMarketLiquidity = tokenReport.totalMarketLiquidity;
   const isRugged = tokenReport.rugged;
   const rugScore = tokenReport.score;
-  const rugRisks = tokenReport.risks
-    ? tokenReport.risks
-    : [
-        {
-          name: "Good",
-          value: "",
-          description: "",
-          score: 0,
-          level: "good",
-        },
-      ];
+  const rugRisks = tokenReport.risks ?? [
+    {
+      name: "Good",
+      value: "",
+      description: "",
+      score: 0,
+      level: "good",
+    },
+  ];
 
-  // Update topholders if liquidity pools are excluded
+  // Update topHolders if liquidity pools are excluded
   if (config.rug_check.exclude_lp_from_topholders) {
-    // local types
-    type Market = {
-      liquidityA?: string;
-      liquidityB?: string;
-    };
+    type Market = { liquidityA?: string; liquidityB?: string };
+    const liquidityAddresses = (tokenReport.markets ?? [])
+      .flatMap((market) => [market.liquidityA, market.liquidityB])
+      .filter((address): address is string => !!address);
 
-    const markets: Market[] | undefined = tokenReport.markets;
-    if (markets) {
-      // Safely extract liquidity addresses from markets
-      const liquidityAddresses: string[] = (markets ?? [])
-        .flatMap((market) => [market.liquidityA, market.liquidityB])
-        .filter((address): address is string => !!address);
-
-      // Filter out topHolders that match any of the liquidity addresses
-      topHolders = topHolders.filter((holder) => !liquidityAddresses.includes(holder.address));
-    }
+    topHolders = topHolders.filter((holder) => !liquidityAddresses.includes(holder.address));
   }
 
   // Get config

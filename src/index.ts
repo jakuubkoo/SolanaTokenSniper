@@ -3,6 +3,7 @@ import { WebSocketRequest } from "./types"; // Typescript Types for type safety
 import { config } from "./config"; // Configuration parameters for our bot
 import { fetchTransactionDetails, createSwapTransaction, getRugCheckConfirmed, fetchAndSaveSwapDetails } from "./transactions";
 import { validateEnv } from "./utils/env-validator";
+import {simulateBuyTransaction} from "./demoTransactions";
 
 // Regional Variables
 let activeTransactions = 0;
@@ -47,7 +48,7 @@ async function processTransaction(signature: string): Promise<void> {
   // Check rug check
   const isRugCheckPassed = await getRugCheckConfirmed(data.tokenMint);
   if (!isRugCheckPassed) {
-    console.log("🚫 Rug Check not passed! Transaction aborted.");
+    console.log("\n⚠️ Rug check not passed! Please review the above warnings! ⚠️");
     console.log("🟢 Resuming looking for new tokens...\n");
     return;
   }
@@ -67,30 +68,30 @@ async function processTransaction(signature: string): Promise<void> {
 
   // Check if simulation mode is enabled
   if (config.rug_check.simulation_mode) {
-    console.log("👀 Token not swapped. Simulation mode is enabled.");
-    console.log("🟢 Resuming looking for new tokens..\n");
-    return;
-  }
+    console.log("🔬 Running in Simulation Mode...");
 
-  // Add initial delay before first buy
-  await new Promise((resolve) => setTimeout(resolve, config.tx.swap_tx_initial_delay));
+    await simulateBuyTransaction(data.tokenMint);
+  }else {
+    // Add initial delay before first buy
+    await new Promise((resolve) => setTimeout(resolve, config.tx.swap_tx_initial_delay));
 
-  // Create Swap transaction
-  const tx = await createSwapTransaction(data.solMint, data.tokenMint);
-  if (!tx) {
-    console.log("⛔ Transaction aborted.");
-    console.log("🟢 Resuming looking for new tokens...\n");
-    return;
-  }
+    // Create Swap transaction
+    const tx = await createSwapTransaction(data.solMint, data.tokenMint);
+    if (!tx) {
+      console.log("⛔ Transaction aborted.");
+      console.log("🟢 Resuming looking for new tokens...\n");
+      return;
+    }
 
-  // Output logs
-  console.log("🚀 Swapping SOL for Token.");
-  console.log("Swap Transaction: ", "https://solscan.io/tx/" + tx);
+    // Output logs
+    console.log("🚀 Swapping SOL for Token.");
+    console.log("Swap Transaction: ", "https://solscan.io/tx/" + tx);
 
-  // Fetch and store the transaction for tracking purposes
-  const saveConfirmation = await fetchAndSaveSwapDetails(tx);
-  if (!saveConfirmation) {
-    console.log("❌ Warning: Transaction not saved for tracking! Track Manually!");
+    // Fetch and store the transaction for tracking purposes
+    const saveConfirmation = await fetchAndSaveSwapDetails(tx);
+    if (!saveConfirmation) {
+      console.log("❌ Warning: Transaction not saved for tracking! Track Manually!");
+    }
   }
 }
 
@@ -146,7 +147,7 @@ async function websocketHandler(): Promise<void> {
 
       // Verify if we have reached the max concurrent transactions
       if (activeTransactions >= MAX_CONCURRENT) {
-        console.log("⏳ Max concurrent transactions reached, skipping...");
+        //console.log("⏳ Max concurrent transactions reached, skipping...");
         return;
       }
 

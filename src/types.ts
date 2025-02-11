@@ -344,3 +344,22 @@ export interface LastPriceDexReponse {
 }
 // Update to reflect an array of transactions
 export type TransactionDetailsResponseArray = TransactionDetailsResponse[];
+
+export type SoldHoldingRecord = {
+  ID?: number;              // Auto-increment ID (optional)
+  Time: number;             // Time of sale
+  Token: string;            // Token mint address
+  TokenName: string;        // Token name
+  Balance: number;          // Amount of tokens sold
+  SolPaid: number;          // Original cost in SOL
+  SolFeePaid: number;       // Fees paid in SOL
+  SolPaidUSDC: number;      // Original cost in USDC
+  SolFeePaidUSDC: number;   // Fees paid in USDC
+  PerTokenPaidUSDC: number; // Original cost per token in USDC
+  Slot: number;             // Blockchain slot number
+  Program: string;          // The source program that processed the sale
+  SoldPriceUSDC: number;    // Total sold price in USDC
+  SoldPerTokenUSDC: number; // Sold price per token in USDC
+  ProfitUSDC: number;       // Profit/loss in USDC
+};
+

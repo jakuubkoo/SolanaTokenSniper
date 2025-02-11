@@ -1,4 +1,4 @@
-import { config } from "./../config"; // Configuration parameters for our bot
+import { config } from "../config"; // Configuration parameters for our bot
 import axios from "axios";
 import * as sqlite3 from "sqlite3";
 import dotenv from "dotenv";
@@ -7,6 +7,7 @@ import { createTableHoldings } from "./db";
 import { createSellTransactionResponse, HoldingRecord, LastPriceDexReponse } from "../types";
 import { DateTime } from "luxon";
 import { createSellTransaction } from "../transactions";
+import { simulateSellTransaction } from "../demoTransactions";
 
 // Load environment variables from the .env file
 dotenv.config();
@@ -77,13 +78,13 @@ async function main() {
 
         // Get raydium legacy pairs prices
         dexRaydiumPairs = currentPricesDex.pairs
-          .filter((pair) => pair.dexId === "raydium")
+          //.filter((pair) => pair.dexId === "raydium")
           .reduce<Array<(typeof currentPricesDex.pairs)[0]>>((uniquePairs, pair) => {
             // Check if the baseToken address already exists
             const exists = uniquePairs.some((p) => p.baseToken.address === pair.baseToken.address);
 
             // If it doesn't exist or the existing one has labels, replace it with the no-label version
-            if (!exists || (pair.labels && pair.labels.length === 0)) {
+            if (!exists) {
               return uniquePairs.filter((p) => p.baseToken.address !== pair.baseToken.address).concat(pair);
             }
 
@@ -137,39 +138,77 @@ async function main() {
           if (config.sell.auto_sell && config.sell.auto_sell === true) {
             const amountIn = tokenBalance.toString().replace(".", "");
 
-            // Sell via Take Profit
-            if (unrealizedPnLPercentage >= config.sell.take_profit_percent) {
-              try {
-                const result: createSellTransactionResponse = await createSellTransaction(config.liquidity_pool.wsol_pc_mint, token, amountIn);
-                const txErrorMsg = result.msg;
-                const txSuccess = result.success;
-                const tXtransaction = result.tx;
-                // Add success to log output
-                if (txSuccess) {
-                  saveLogTo(actionsLogs, `✅🟢 ${hrTradeTime}: Took profit for ${tokenName}\nTx: ${tXtransaction}`);
-                } else {
-                  saveLogTo(actionsLogs, `⚠️ ERROR when taking profit for ${tokenName}: ${txErrorMsg}`);
+            if (config.rug_check.simulation_mode && config.rug_check.simulation_mode === true) {
+              // Sell via Take Profit
+              if (unrealizedPnLPercentage >= config.sell.take_profit_percent) {
+                try {
+                  const result: createSellTransactionResponse = await simulateSellTransaction(config.liquidity_pool.wsol_pc_mint, token, amountIn);
+                  const txErrorMsg = result.msg;
+                  const txSuccess = result.success;
+                  const tXtransaction = result.tx;
+                  // Add success to log output
+                  if (txSuccess) {
+                    saveLogTo(actionsLogs, `✅🟢 ${hrTradeTime}: Took profit for ${tokenName}\nTx: ${tXtransaction}`);
+                  } else {
+                    saveLogTo(actionsLogs, `⚠️ ERROR when taking profit for ${tokenName}: ${txErrorMsg}`);
+                  }
+                } catch (error: any) {
+                  saveLogTo(actionsLogs, `⚠️  ERROR when taking profit for ${tokenName}: ${error.message}`);
                 }
-              } catch (error: any) {
-                saveLogTo(actionsLogs, `⚠️  ERROR when taking profit for ${tokenName}: ${error.message}`);
               }
-            }
 
-            // Sell via Stop Loss
-            if (unrealizedPnLPercentage <= -config.sell.stop_loss_percent) {
-              try {
-                const result: createSellTransactionResponse = await createSellTransaction(config.liquidity_pool.wsol_pc_mint, token, amountIn);
-                const txErrorMsg = result.msg;
-                const txSuccess = result.success;
-                const tXtransaction = result.tx;
-                // Add success to log output
-                if (txSuccess) {
-                  saveLogTo(actionsLogs, `✅🔴 ${hrTradeTime}: Triggered Stop Loss for ${tokenName}\nTx: ${tXtransaction}`);
-                } else {
-                  saveLogTo(actionsLogs, `⚠️ ERROR when triggering Stop Loss for ${tokenName}: ${txErrorMsg}`);
+              // Sell via Stop Loss
+              if (unrealizedPnLPercentage <= -config.sell.stop_loss_percent) {
+                try {
+                  const result: createSellTransactionResponse = await simulateSellTransaction(config.liquidity_pool.wsol_pc_mint, token, amountIn);
+                  const txErrorMsg = result.msg;
+                  const txSuccess = result.success;
+                  const tXtransaction = result.tx;
+                  // Add success to log output
+                  if (txSuccess) {
+                    saveLogTo(actionsLogs, `✅🔴 ${hrTradeTime}: Triggered Stop Loss for ${tokenName}\nTx: ${tXtransaction}`);
+                  } else {
+                    saveLogTo(actionsLogs, `⚠️ ERROR when triggering Stop Loss for ${tokenName}: ${txErrorMsg}`);
+                  }
+                } catch (error: any) {
+                  saveLogTo(actionsLogs, `\n⚠️ ERROR when triggering Stop Loss for ${tokenName}: ${error.message}: \n`);
                 }
-              } catch (error: any) {
-                saveLogTo(actionsLogs, `\n⚠️ ERROR when triggering Stop Loss for ${tokenName}: ${error.message}: \n`);
+              }
+            }else{
+              // Sell via Take Profit
+              if (unrealizedPnLPercentage >= config.sell.take_profit_percent) {
+                try {
+                  const result: createSellTransactionResponse = await createSellTransaction(config.liquidity_pool.wsol_pc_mint, token, amountIn);
+                  const txErrorMsg = result.msg;
+                  const txSuccess = result.success;
+                  const tXtransaction = result.tx;
+                  // Add success to log output
+                  if (txSuccess) {
+                    saveLogTo(actionsLogs, `✅🟢 ${hrTradeTime}: Took profit for ${tokenName}\nTx: ${tXtransaction}`);
+                  } else {
+                    saveLogTo(actionsLogs, `⚠️ ERROR when taking profit for ${tokenName}: ${txErrorMsg}`);
+                  }
+                } catch (error: any) {
+                  saveLogTo(actionsLogs, `⚠️  ERROR when taking profit for ${tokenName}: ${error.message}`);
+                }
+              }
+
+              // Sell via Stop Loss
+              if (unrealizedPnLPercentage <= -config.sell.stop_loss_percent) {
+                try {
+                  const result: createSellTransactionResponse = await createSellTransaction(config.liquidity_pool.wsol_pc_mint, token, amountIn);
+                  const txErrorMsg = result.msg;
+                  const txSuccess = result.success;
+                  const tXtransaction = result.tx;
+                  // Add success to log output
+                  if (txSuccess) {
+                    saveLogTo(actionsLogs, `✅🔴 ${hrTradeTime}: Triggered Stop Loss for ${tokenName}\nTx: ${tXtransaction}`);
+                  } else {
+                    saveLogTo(actionsLogs, `⚠️ ERROR when triggering Stop Loss for ${tokenName}: ${txErrorMsg}`);
+                  }
+                } catch (error: any) {
+                  saveLogTo(actionsLogs, `\n⚠️ ERROR when triggering Stop Loss for ${tokenName}: ${error.message}: \n`);
+                }
               }
             }
           }
