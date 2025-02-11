@@ -8,6 +8,7 @@
     "start:tracker": "node dist/tracker/index.js",
     "dev": "ts-node src/index.ts",
     "tracker": "ts-node src/tracker/index.ts",
+    "bot": "npx ts-node bot.ts",
     "test": "ts-node src/test.ts",
     "clean": "rm -rf dist"
   },

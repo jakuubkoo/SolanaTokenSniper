@@ -14,6 +14,10 @@ async function sendTelegramMessage(message: string) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const chatId = process.env.TELEGRAM_CHAT_ID;
 
+    if (!config.swap.telegram_log) {
+        return;
+    }
+
     if (!botToken || !chatId) {
         console.error("⛔ Telegram bot token or chat ID is missing!");
         return;
